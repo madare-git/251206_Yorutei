@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>よる定（YORUTEI） | 今夜の定食</title>
+    <link rel="stylesheet" href="style.css">
+    </head>
+<body>
+
+    <div id="map-view" class="active">
+        <header>
+            <div class="search-bar">
+                <input type="text" placeholder="ジャンルや価格で絞り込む...">
+                <button>🔍</button>
+            </div>
+        </header>
+        
+        <div class="map-container">
+            <div class="map-placeholder">
+                
+                <p>現在地周辺の「夜定食」提供中のお店（ピン）</p>
+                <p>※ONになっている店だけを表示</p>
+            </div>
+            
+            <div id="shop-preview" class="shop-preview hidden" onclick="showDetail()">
+                <img src="https://via.placeholder.com/60x60" alt="定食写真" class="shop-img">
+                <div class="shop-info">
+                    <p class="shop-name">**地鶏と野菜のお店 A**</p>
+                    <p class="shop-genre">🐔 肉系定食</p>
+                </div>
+                <div class="shop-price">
+                    <span class="price-tag">¥1,200</span>
+                    <span class="distance">徒歩 3分</span>
+                </div>
+            </div>
+        </div>
+        
+        <button class="list-toggle-btn">リスト表示に切り替え</button>
+    </div>
+
+    <div id="detail-view" class="hidden">
+        <header>
+            <button onclick="showMap()">← 戻る</button>
+            <h1>地鶏と野菜のお店 A</h1>
+        </header>
+        
+        <main class="shop-detail-content">
+            <div class="image-gallery">
+                <img src="https://via.placeholder.com/400x250?text=Sample+Teishoku+1" alt="定食写真1">
+                </div>
+            
+            <section class="info-section">
+                <h2>おまかせ定食（地鶏と野菜）</h2>
+                <p class="price-large">¥1,200 (税込)</p>
+                <div class="tags">
+                    <span>🐔 肉系定食</span>
+                    <span>🍚 和食</span>
+                    <span>✅ アルコール不要</span>
+                </div>
+                <p class="address">📍 東京都千代田区神田 XX-XX</p>
+            </section>
+            
+            <section class="action-section">
+                <button class="go-button">この店に向かう</button>
+                <p class="remaining">残り食数：**わずか**</p>
+            </section>
+            
+            <section class="review-section">
+                <h3>ユーザー投稿写真 (スプリント3以降)</h3>
+                <div class="user-photos">
+                    <img src="https://via.placeholder.com/80x80" alt="ユーザー写真" class="user-photo">
+                    <img src="https://via.placeholder.com/80x80" alt="ユーザー写真" class="user-photo">
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
