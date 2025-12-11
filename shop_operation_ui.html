@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <title>よる定 - リアルタイム提供管理</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    
+    <style>
+        /* CSS: リアルタイム操作に特化したデザイン */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f4f8;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+        h1 { color: #4285F4; margin-bottom: 20px; font-size: 1.8em; }
+        #status-display {
+            font-size: 1.5em;
+            font-weight: 700;
+            margin-bottom: 20px;
+            padding: 10px;
+            border-radius: 8px;
+            transition: all 0.5s;
+        }
+        /* トグルスイッチのスタイル */
+        .toggle-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 40px;
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 100px;
+            height: 40px;
+            margin: 0 20px;
+        }
+        .toggle-switch input { display: none; }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.4s;
+            border-radius: 40px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 32px;
+            width: 32px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: 0.4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider { background-color: #4CAF50; /* Green ON */ }
+        input:checked + .slider:before { transform: translateX(60px); }
+        
+        /* 数量管理のスタイル */
+        .quantity-control {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+        }
+        .quantity-control button {
+            padding: 10px 18px;
+            font-size: 1.5em;
+            font-weight: 700;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            cursor: pointer;
+            background-color: #f9f9f9;
+            transition: background-color 0.2s;
+        }
+        .quantity-control button:hover { background-color: #e0e0e0; }
+        #current-capacity {
+            font-size: 2em;
+            font-weight: 900;
+            color: #333;
+            width: 60px;
+            text-align: center;
+        }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>よる定 - リアルタイム管理</h1>
+        <p>夜定食の提供状況をワンタップで切り替えます。</p>
+
+        <div id="status-display">
+            現在、提供は停止中です
+        </div>
+
+        <div class="toggle-container">
+            <span style="font-size: 1.2em; color: #cc3333;">提供 OFF</span>
+            <label class="toggle-switch">
+                <input type="checkbox" id="serviceToggle">
+                <span class="slider"></span>
+            </label>
+            <span style="font-size: 1.2em; color: #4CAF50;">提供 ON</span>
+        </div>
+
+        <div id="capacity-section" class="hidden">
+            <h2>現在提供可能な席数</h2>
+            <p style="color: #666;">（ユーザーが確認する残数情報です）</p>
+            <div class="quantity-control">
+                <button id="decrement">-</button>
+                <span id="current-capacity">0</span>
+                <button id="increment">+</button>
+            </div>
+        </div>
+        
+    </div>
+
+    <script>
+        // JavaScript: リアルタイムの状態管理
+
+        const toggle = document.getElementById('serviceToggle');
+        const statusDisplay = document.getElementById('status-display');
+        const capacitySection = document.getElementById('capacity-section');
+        const currentCapacitySpan = document.getElementById('current-capacity');
+        const decrementBtn = document.getElementById('decrement');
+        const incrementBtn = document.getElementById('increment');
+
+        let isServiceOn = false;
+        let currentCapacity = 0; // 現在提供可能な席数 (初期値0)
+        const maxCapacity = 50;  // 仮の最大席数
+
+        // 状態を更新し、サーバーに送信する関数
+        function updateStatus(isOn, newCapacity) {
+            isServiceOn = isOn;
+            currentCapacity = newCapacity;
+
+            // 1. UIの更新
+            if (isServiceOn) {
+                statusDisplay.textContent = `提供中 - 残り ${currentCapacity} 席`;
+                statusDisplay.style.backgroundColor = '#E8F5E9'; // 薄い緑
+                statusDisplay.style.color = '#2E7D32';
+                capacitySection.classList.remove('hidden');
+            } else {
+                statusDisplay.textContent = '現在、提供は停止中です';
+                statusDisplay.style.backgroundColor = '#FFEBEE'; // 薄い赤
+                statusDisplay.style.color = '#C62828';
+                capacitySection.classList.add('hidden');
+            }
+            
+            currentCapacitySpan.textContent = currentCapacity;
+
+            // 2. サーバーへのデータ送信
+            const realTimeData = {
+                shop_id: 'SHOP_001', // 実際は認証情報から取得
+                is_active: isServiceOn,
+                available_seating: currentCapacity
+            };
+            console.log("リアルタイムデータ更新:", realTimeData);
+            // TODO: fetch('/api/vendor/status', { method: 'POST', body: JSON.stringify(realTimeData) });
+        }
+        
+        // トグルスイッチのイベント
+        toggle.addEventListener('change', () => {
+            if (toggle.checked) {
+                // ONになったら、初期席数を仮に設定
+                updateStatus(true, 10);
+            } else {
+                // OFFになったら、席数を0にして非表示
+                updateStatus(false, 0);
+            }
+        });
+
+        // 席数増減イベント
+        decrementBtn.addEventListener('click', () => {
+            if (currentCapacity > 0) {
+                updateStatus(true, currentCapacity - 1);
+            }
+        });
+
+        incrementBtn.addEventListener('click', () => {
+            if (currentCapacity < maxCapacity) {
+                updateStatus(true, currentCapacity + 1);
+            }
+        });
+
+        // 初期ロード時の状態設定（アプリ起動時はOFFを想定）
+        updateStatus(false, 0);
+    </script>
+
+</body>
+</html>

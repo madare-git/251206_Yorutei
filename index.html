@@ -1,82 +1,361 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>よる定（YORUTEI） | 今夜の定食</title>
+    <title>東京タワーのGoogle Map</title>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
     <link rel="stylesheet" href="style.css">
-    
-    <script src="https://maps.googleapis.com/maps/api/js?key=__API_KEY__&callback=initMap" defer></script>
-    <style>
-        /* 地図コンテナ (#map) が親要素の領域を全て占めるように設定 */
-        #map {
-            width: 100%;
-            height: 100%;
-        }
-    </style>
+
 </head>
 <body>
 
-    <div id="map-view" class="active">
-        <header>
-            <div class="search-bar">
-                <input type="text" placeholder="ジャンルや価格で絞り込む...">
-                <button>🔍</button>
-            </div>
-        </header>
+    <div id="app-container">
         
-        <div class="map-container">
-            <div id="map"></div>
+        <div id="sidebar">
+            <h2>🍜 現在近くで夜定食が食べられる飲食店</h2>
             
-            <div id="shop-preview" class="shop-preview hidden" data-shop-id="" onclick="showDetail(this.dataset.shopId)">
-                <img id="preview-img" src="" alt="定食写真" class="shop-img">
-                <div class="shop-info">
-                    <p id="preview-name" class="shop-name"></p>
-                    <p id="preview-genre" class="shop-genre"></p>
-                </div>
-                <div class="shop-price">
-                    <span id="preview-price" class="price-tag"></span>
-                    <span id="preview-distance" class="distance"></span>
-                </div>
+            <div style="margin-bottom: 20px;">
+                <input type="text" placeholder="場所、料理名などで検索..." style="width: 100%; padding: 8px; border: 1px solid #ccc; box-sizing: border-box;">
             </div>
+
+            <ul id="shop-list-container" class="shop-list">
+                </ul>
+
         </div>
-        
-        <button class="list-toggle-btn">リスト表示に切り替え</button>
+
+        <div id="map"></div>
     </div>
 
-    <div id="detail-view" class="hidden">
-        <header>
-            <button onclick="showMap()">← 戻る</button>
-            <h1 id="detail-name-header"></h1>
-        </header>
-        
-        <main class="shop-detail-content">
-            <div class="image-gallery">
-                <img id="detail-img" src="" alt="定食写真1">
-            </div>
-            
-            <section class="info-section">
-                <h2 id="detail-menu-title">おまかせ定食</h2>
-                <p id="detail-price" class="price-large"></p>
-                <div id="detail-tags" class="tags">
-                    </div>
-                <p id="detail-address" class="address"></p>
-            </section>
-            
-            <section class="action-section">
-                <button id="go-button" class="go-button">この店に向かう</button>
-                <p id="detail-remaining" class="remaining">残り食数：**わずか**</p>
-            </section>
-            
-            <section class="review-section">
-                <h3>ユーザー投稿写真 (スプリント3以降)</h3>
-                <div class="user-photos">
-                    <img src="https://via.placeholder.com/80x80" alt="ユーザー写真" class="user-photo">
-                </div>
-            </section>
-        </main>
-    </div>
 
-    <script src="script.js"></script>
+    <script type="module">
+        
+        // =========================================================
+        // 1. IMPORT & 初期設定
+        // =========================================================
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+        import {
+            getDatabase,
+            ref,
+            get,
+            push,
+            set,
+            update,
+            remove,
+            onChildAdded,
+            onChildChanged,
+            onChildRemoved
+        } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-analytics.js";
+        
+
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "API KEY",
+            authDomain: "API KEY",
+            projectId: "pAPI KEY",
+            storageBucket: "API KEY",
+            messagingSenderId: "API KEY",
+            appId: "API KEY"
+        };
+
+        // Initialize Firebase　（Firebaseアプリを起動）
+        const app = initializeApp(firebaseConfig); //Firebaseに接続
+        const db = getDatabase(app);              //RealtimeDBに接続
+        const dbRef = ref(db, "Shopinfo");           //RealtimeDB内の"Shopinfoフォルダ"を使う設定
+
+        // グローバル変数・定数
+        const listContainer = document.getElementById('shop-list-container'); //Firebaseから取得した全店舗データを格納するために、グローバルスコープで配列を宣言
+        const markers = [];
+        let map;
+        let infoWindow; 
+        let shopLocations = []; // Firebaseから取得したデータを格納する配列
+
+
+
+
+        // =========================================================
+        // 2. データ取得と整形 (Firebase)
+        // =========================================================
+            // Firebaseから全店舗データを非同期で取得し整形する関数
+            // ネットワーク通信を伴うため、asyncキーワードを使用し、処理の完了を待機（await）できるようにする。
+        async function getShopsFromFirebase() {
+            try {
+                const snapshot = await get(dbRef); // dbRefで指定されたパス（/Shopinfo）のデータを一度だけ取得します。awaitにより、データが届くまでここで処理が停止。
+                const shopsData = snapshot.val(); // 取得したデータをJavaScriptオブジェクトとして取得
+                
+                if (shopsData) {
+                    const shopArray = Object.keys(shopsData).map(key => {
+                        const data = shopsData[key];
+                        
+                        const detailString = `${data.genre} | 評価: ★${data.rating.toFixed(1)} | ${data.available_seating}席 | ${data.children_policy} | ${data.allergy_policy}`;
+                        const statusText = data.yorutei_status === '提供中' 
+                                        ? `<span style="color: green; font-weight: 700;">提供中 (${data.available_seating}席)</span>` 
+                                        : `<span style="color: red;">${data.yorutei_status}</span>`;
+
+                        return { 
+                            ...data, 
+                            id: key,
+                            lat: parseFloat(data.latitude), 
+                            lng: parseFloat(data.longitude),
+                            display_detail: detailString,
+                            display_status: statusText
+                        };
+                    });
+                    return shopArray;
+                }
+                return [];
+            } catch (error) {
+                console.error("Firebaseデータ取得エラー:", error);
+                return [];
+            }
+        }
+
+        // =========================================================
+        // 3. 非同期制御 (Google Maps SDK ロード管理)
+        // =========================================================
+        
+        // Google Maps SDKのロード完了を待つ関数
+        function loadGoogleMapsSdk() {
+            return new Promise((resolve, reject) => {
+                // 既にロードされていたらすぐに解決
+                if (window.google && window.google.maps) {
+                    return resolve();
+                }
+
+                // ロード完了時に実行されるグローバルコールバック関数を定義
+                window.googleMapsLoadedCallback = () => {
+                    resolve();
+                };
+
+                // スクリプトタグを動的に生成し、ロードを開始
+                const script = document.createElement('script');
+
+                script.src = `https://maps.googleapis.com/maps/api/js?key=API KEY&libraries=marker&callback=googleMapsLoadedCallback&loading=async`;
+                
+                script.onerror = () => reject(new Error("Google Maps SDKのロードに失敗しました。"));
+                
+                // ページに挿入し、ロードを開始
+                document.head.appendChild(script);
+            });
+        }
+
+        // ★重要★ Google Maps SDKの読み込み完了時のグローバル関数 (HTMLのcallback属性がなくても機能するよう設定)
+        window.googleMapsLoaded = () => {
+            // ロードが完了したら Promise を解決する
+            if (typeof window.googleMapsLoaded === 'function') {
+                window.googleMapsLoaded();
+            }
+        };
+
+        
+
+        // =========================================================
+        // 4. メインロジック (実行順序の統括)
+        // =========================================================
+
+        async function main() {
+            try{
+                // [1] Firebaseからのデータ取得を待機
+                shopLocations = await getShopsFromFirebase();
+            
+                // [2] Google Mapsのロード完了を待機 (これが完了すると window.google が使える)
+                await loadGoogleMapsSdk(); 
+            
+                // [3] 全ての依存関係が解決した後で、地図ロジックを実行
+                initMapLogic(shopLocations);
+                
+            } catch (error) {
+                console.error("メインロジックエラー:", error);
+                document.getElementById('map').innerHTML = '地図の表示に失敗しました。コンソールを確認してください。';
+            }
+             
+        }
+
+        // =========================================================
+        // 5. 地図初期化ロジック (旧 initMap の実体)
+        // =========================================================
+
+        // Google Mapsの読み込みが完了した後に実行される関数
+        async function initMapLogic(shopsData) {
+            const mapDiv = document.getElementById('map');
+            infoWindow = new google.maps.InfoWindow();
+
+            // お店用の青いピンを作成する関数
+            function createBlueMarkerElement() {
+                // Advanced Markerのデフォルトのピン (PinElement) を利用
+                const pinElement = new google.maps.marker.PinElement({
+                    background: '#4285F4', // 青色 (Google Material Blue)
+                    borderColor: '#3C73D6',
+                    glyphColor: '#fff',     // グリフ (中の点) を白色に
+                });
+                // PinElementのDOM要素を返します
+                return pinElement.element;
+            };
+
+
+            // 1. Geolocation APIが利用可能かチェック
+            if (navigator.geolocation) {
+            
+                // 2. 現在地を取得する
+                navigator.geolocation.getCurrentPosition(
+                
+                    // 成功時のコールバック関数
+                    (position) => {
+                        // 現在地の緯度と経度を取得
+                        const userPosition = {
+                            lat: position.coords.latitude, // 緯度
+                            lng: position.coords.longitude, // 経度
+                        };
+
+                        // 3. 地図を作成し、現在地を中心に設定
+                        map = new google.maps.Map(mapDiv, {
+                            zoom: 15, // ズームレベル (現在地周辺がよく見えるレベル)
+                            center: userPosition, // 地図の中心を現在地に設定
+                            mapId: 'D5797e5c2f81a6966dc6fd862' // カスタムマップスタイルを使用する場合のID
+                        });
+                        
+                        // 4. 【修正】現在地のマーカーを AdvancedMarkerElement で設置
+                        const currentLocationMarker = new google.maps.marker.AdvancedMarkerElement({
+                            position: userPosition,
+                            map: map,
+                            title: '現在地',
+                        });
+
+                        // 現在地マーカーにクリックリスナーとInfoWindowを設定
+                        currentLocationMarker.addListener('click', () => {
+                            infoWindow.setContent(`<h3>現在地</h3><p>緯度: ${userPosition.lat.toFixed(5)}, 経度: ${userPosition.lng.toFixed(5)}</p>`);
+                            infoWindow.open(map, currentLocationMarker);
+                        });
+
+
+                        // 5. 【修正】お店のマーカーを AdvancedMarkerElement で設置し、配列に格納
+                        shopLocations.forEach((shop, index) => {
+                            const marker = new google.maps.marker.AdvancedMarkerElement({
+                                position: { lat: shop.lat, lng: shop.lng },
+                                map: map,
+                                title: shop.name,
+                                content: createBlueMarkerElement(), // ここで青いピンを適用
+                            });
+                            markers.push(marker); // マーカーオブジェクトを配列に保存
+                            
+                            // マーカーがクリックされたら InfoWindow を開く
+                            marker.addListener('click', () => {
+                                infoWindow.setContent(`<h3>${shop.name}</h3><p>${shop.detail}</p>`);
+                                infoWindow.open(map, marker);
+
+                                // リストの連動 (クリックされたマーカーに対応するリストアイテムをハイライト)
+                                document.querySelectorAll('.shop-item').forEach(el => el.classList.remove('is-active'));
+                                document.querySelector(`.shop-item[data-index="${index}"]`).classList.add('is-active');
+                            });
+                        });
+
+                        // 6. サイドバーにリストを生成
+                        createShopList(shopLocations);
+                                        
+                    },
+
+
+
+                    // 失敗時（エラー時）のコールバック関数
+                    (error) => { // エラーオブジェクトを受け取る
+                        // 【★重要修正★】エラー発生時の処理: 地図を作成し、お店のマーカーを設置
+                        
+                        const defaultCenter = { lat: 35.6586, lng: 139.7454 }; // 東京タワー
+                        
+                        map = new google.maps.Map(mapDiv, {
+                            zoom: 13,
+                            center: defaultCenter,
+                            mapId: 'D5797e5c2f81a6966dc6fd862' // カスタムマップスタイルを使用する場合のID
+                        });
+                        
+                        alert('位置情報の取得に失敗しました。デフォルトの位置を表示します。');
+                        
+                        // エラー時もお店のマーカーは AdvancedMarkerElement で設置する
+                        shopLocations.forEach((shop, index) => {
+                            const marker = new google.maps.marker.AdvancedMarkerElement({
+                                position: { lat: shop.lat, lng: shop.lng },
+                                map: map,
+                                title: shop.name,
+                            });
+                            markers.push(marker); // マーカーを配列に保存
+                            
+                            // マーカーのクリックリスナーも設定
+                            marker.addListener('click', () => {
+                                infoWindow.setContent(`<h3>${shop.name}</h3><p>${shop.detail}</p>`);
+                                infoWindow.open(map, marker);
+                                document.querySelectorAll('.shop-item').forEach(el => el.classList.remove('is-active'));
+                                document.querySelector(`.shop-item[data-index="${index}"]`).classList.add('is-active');
+                            });
+                        });
+                        
+                        createShopList(shopLocations); // リストは生成
+                    },
+
+                    
+                    // オプション設定
+                    {
+                        enableHighAccuracy: true, // 高精度な位置情報を要求
+                        timeout: 5000,            // 5秒でタイムアウト
+                        maximumAge: 0             // キャッシュされた位置情報を使わない
+                    }
+                );
+
+            } else {
+                // Geolocation APIに対応していないブラウザの場合の処理
+                alert('お使いのブラウザは位置情報サービスに対応していません。');
+            
+                // 地図をデフォルトの位置 (例: 東京タワー) で表示する処理を追加しても良い
+            }   
+        }
+
+
+        // リストの動的生成
+        function createShopList(shops) {
+            listContainer.innerHTML = '';
+            shops.forEach((shop, index) => {
+                const listItem = document.createElement('li');
+                listItem.className = 'shop-item';
+                listItem.setAttribute('data-index', index); // マーカーと連動させるためのインデックス
+                
+                listItem.innerHTML = `
+                    <div class="shop-name">${shop.shop_name} (${shop.display_status})</div>
+                    <div class="shop-detail">${shop.display_detail}</div>
+                `;
+                
+                listContainer.appendChild(listItem);
+            });
+            addListClickListeners(); // リスト生成後、クリックリスナーを追加
+        }
+
+        // リストアイテムにクリックイベントリスナーを追加（地図連動）
+        function addListClickListeners() {
+            document.querySelectorAll('.shop-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const index = item.getAttribute('data-index');
+                    const shop = shopLocations[index];
+                    const marker = markers[index];
+
+                    // 1. 地図の中心を店舗の位置に移動
+                    map.panTo(marker.position);
+                    
+                    // 2. InfoWindowの内容を設定し、開く
+                    infoWindow.setContent(`<h3>${shop.name}</h3><p>${shop.detail}</p>`);
+                    infoWindow.open(map, marker);
+                    
+                    // 3. リストアイテムをハイライト
+                    document.querySelectorAll('.shop-item').forEach(el => el.classList.remove('is-active'));
+                    item.classList.add('is-active');
+                });
+            });
+        }
+        
+        // 最終実行
+        main();
+
+        // =========================================================
+    </script>
+
+    
+
 </body>
 </html>

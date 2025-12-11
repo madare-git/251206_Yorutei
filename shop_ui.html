@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <title>よる定 - 店舗基本情報登録</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    
+    <style>
+        /* CSS: 基本的なレイアウトとデザイン */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f4f8;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            max-width: 650px;
+            width: 100%;
+        }
+        h1 { color: #4285F4; text-align: center; margin-bottom: 5px; font-size: 1.8em; }
+        .subtitle { text-align: center; color: #666; margin-bottom: 30px; border-bottom: 2px solid #e0e0e0; padding-bottom: 15px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; color: #333; }
+        input[type="text"], input[type="number"], select {
+            width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 1em;
+            transition: border-color 0.3s;
+        }
+        input:focus, select:focus { border-color: #4285F4; outline: none; }
+        .button-group { text-align: right; margin-top: 30px; }
+        #saveButton {
+            padding: 12px 25px; font-size: 1em; font-weight: 600; border: none; border-radius: 8px; cursor: pointer;
+            background-color: #4285F4; color: white;
+        }
+        #saveButton:hover { background-color: #3367d6; }
+        .radio-group, .checkbox-group { display: flex; flex-wrap: wrap; gap: 20px 30px; margin-top: 5px; }
+        .radio-group label, .checkbox-group label { font-weight: normal; margin-bottom: 0; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>よる定 - 店舗情報登録</h1>
+        <p class="subtitle">一度登録すれば変更は少なめ。ユーザーへの基本情報を設定します。</p>
+
+        <form id="vendorSetupForm">
+            
+            <div class="form-group">
+                <label for="shop_name">店舗名</label>
+                <input type="text" id="shop_name" placeholder="店舗名を入力" required>
+            </div>
+            <div class="form-group">
+                <label for="address">住所</label>
+                <input type="text" id="address" placeholder="都道府県から住所を入力" required>
+            </div>
+            <div class="form-group">
+                <label for="phone">電話番号</label>
+                <input type="text" id="phone" placeholder="例: 03-XXXX-XXXX" required>
+            </div>
+
+            <div class="form-group">
+                <label for="genre">主なジャンル</label>
+                <select id="genre" required>
+                    <option value="">選択してください</option>
+                    <option value="和食">和食</option>
+                    <option value="魚料理">魚料理</option>
+                    <option value="鶏料理">鶏料理</option>
+                    <option value="うどん・そば">うどん・そば</option>
+                    <option value="とんかつ">とんかつ</option>
+                    <option value="中華">中華</option>
+                    <option value="洋食">洋食</option>
+                    <option value="カレー">カレー</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>お子様の入店ポリシー</label>
+                <div class="radio-group">
+                    <input type="radio" id="children_ok" name="children" value="子供OK" required>
+                    <label for="children_ok">子供OK (制限なし)</label>
+                    <input type="radio" id="children_age" name="children" value="年齢制限あり" required>
+                    <label for="children_age">年齢制限あり (例: 10歳以上)</label>
+                    <input type="radio" id="children_ng" name="children" value="幼児NG" required>
+                    <label for="children_ng">幼児NG / 小さなお子様不可</label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>アレルギー対応の可否</label>
+                <div class="radio-group">
+                    <input type="radio" id="allergy_ok" name="allergy" value="可" required>
+                    <label for="allergy_ok">個別対応 可</label>
+                    <input type="radio" id="allergy_consult" name="allergy" value="要相談" required>
+                    <label for="allergy_consult">要相談 (当日の食材次第)</label>
+                    <input type="radio" id="allergy_ng" name="allergy" value="不可" required>
+                    <label for="allergy_ng">不可</label>
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button type="submit" id="saveButton">基本情報を保存・更新</button>
+            </div>
+        </form>
+    </div>
+
+    <script type="module">
+        
+        
+        // =========================================================
+        // Firebase Realtime Database連携コード
+        // =========================================================
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+        import {
+            getDatabase,
+            ref,
+            push,
+            set,
+            update,
+            remove,
+            onChildAdded,
+            onChildChanged,
+            onChildRemoved
+        } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-analytics.js";
+        
+
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "API KEY",
+            authDomain: "API KEY",
+            projectId: "pAPI KEY",
+            storageBucket: "API KEY",
+            messagingSenderId: "API KEY",
+            appId: "API KEY"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig); //Firebaseに接続
+        const db = getDatabase(app);              //RealtimeDBに接続
+        const dbRef = ref(db, "Shopinfo");           //RealtimeDB内の"chatフォルダ"を使う設定
+
+
+        // =========================================================
+        // 非同期制御 (Google Maps SDK ロード管理)
+        // =========================================================
+
+        // Geocoding機能の利用に必要なSDKのロード完了を制御します。
+        function loadGoogleMapsSdk() {
+            return new Promise((resolve, reject) => {
+                if (window.google && window.google.maps) {
+                    return resolve();
+                }
+
+                // ロード完了時に実行されるグローバルコールバック関数を定義
+                window.googleMapsLoadedCallback = resolve;
+
+                const script = document.createElement('script');
+                
+                // callback=googleMapsLoadedCallback を指定してロード
+                script.src = `https://maps.googleapis.com/maps/api/js?key=API_KEY&callback=googleMapsLoadedCallback&loading=async`;
+                
+                script.onerror = () => reject(new Error("Google Maps SDKのロードに失敗しました。"));
+                
+                document.head.appendChild(script);
+            });
+        }
+        // =========================================================
+        // 4. メイン処理の統括 (Geocodingの準備)
+        // =========================================================
+
+        // アプリケーション全体が開始する前に、SDKのロードを開始
+        loadGoogleMapsSdk()
+            .then(() => {
+                console.log("Google Maps SDK ロード完了。Geocoding機能利用可能。");
+            })
+            .catch(error => {
+                console.error("SDK初期化に失敗しました。", error);
+                alert("地図・住所変換機能の初期化に失敗しました。キーを確認してください。");
+            });
+
+        
+        // =========================================================
+        // 5. フォーム送信ロジック (Geocodingと保存の実行)
+        // =========================================================
+
+        document.getElementById('vendorSetupForm').addEventListener('submit', async function(event) { //  非同期：async を追加★
+        event.preventDefault(); // フォームの標準送信を防ぐ
+
+        // フォームからデータを取得
+        const shop_name = document.getElementById('shop_name');
+        const address = document.getElementById('address');
+        const phone = document.getElementById('phone');
+        const genre = document.getElementById('genre');
+        
+        // ラジオボタンよりチェックされている要素を取得
+        const children_policy = document.querySelector('input[name="children"]:checked');
+        const allergy_policy = document.querySelector('input[name="allergy"]:checked');
+        const saveBtn = document.getElementById("saveButton");
+        
+        // ラジオボタンの未選択チェック
+        // required属性があるため本来は不要ですが、念のためコード側でも未選択時の値がないことを確認します。
+        // もし値がない場合は、保存処理を中断し、ユーザーにアラートを出します。
+        // if (!children_policy_el || !allergy_policy_el) {
+        //     alert("「お子様の入店ポリシー」と「アレルギー対応の可否」を必ず選択してください。");
+        //     return; // 処理を中断
+        // }
+        
+        // 緯度経度を格納する変数
+        let lat = null;
+        let lng = null;
+
+        // =========================================================
+        // Geocoding 処理の実行
+        // =========================================================
+        try {
+            // Geocoding機能が利用可能か最終チェック
+            if (typeof google === 'undefined' || typeof google.maps.Geocoder === 'undefined') {
+                 throw new Error("Geocoding機能がまだロードされていません。時間を置いて再度お試しください。");
+            }
+            
+            const geocoder = new google.maps.Geocoder();
+            
+            // Geocoding APIに住所を渡し、結果が返ってくるのを待機 (await)
+            const response = await geocoder.geocode({ 'address': address.value });
+            
+            if (response.results.length > 0) {
+                const location = response.results[0].geometry.location;
+                lat = location.lat(); // 緯度を取得
+                lng = location.lng(); // 経度を取得
+                console.log(`Geocoding成功: 緯度 ${lat}, 経度 ${lng}`);
+            } else {
+                throw new Error("Geocoding結果が見つかりませんでした。住所を確認してください。");
+            }
+
+        } catch (error) {
+            console.error("Geocoding処理中にエラーが発生しました:", error.message);
+            alert("住所の特定に失敗しました。正しい住所を入力してください。処理を中断します。");
+            return; // Geocoding失敗時は処理を中断
+        }
+
+        console.log("Geocoding結果 - 緯度:", lat, "経度:", lng);
+        // ---------------------------------------------------------------------
+
+
+        // 永続化するデータ構造
+        const data = {
+                shop_name: shop_name.value,
+                address: address.value,
+                phone: phone.value,
+                genre: genre.value,
+                children_policy: children_policy.value,
+                allergy_policy: allergy_policy.value,
+                // TODO: 実際のアプリでは、addressからGeocoding APIを叩き、緯度経度を取得する処理が必要
+                latitude: lat,
+                longitude: lng,
+                // ★重要★: 初期評価はユーザー登録時に固定値または空白としておく
+                rating: 0.0,
+                yorutei_status: '未提供',
+                available_seating: 0,
+            };
+        
+            // 1. ユニークKEYを生成
+            const newPostRef = push(dbRef); //ユニークKEYを生成
+            // 2. データを保存
+            set(newPostRef, data)  //"chat"にユニークKEYを作成し、msgデータを保存        
+                .then(() => {
+                    console.log("SUCCESS: Firebaseにデータが保存されました。KEY:", newPostRef.key);
+                    alert("基本情報が正常に保存されました！\n次にリアルタイム管理画面へ遷移します。");
+
+                // フォームのクリア処理
+                shop_name.value = "";
+                address.value = "";
+                phone.value = "";
+                genre.value = "";
+                children_policy.value = "";
+                allergy_policy.value = "";
+            })
+
+            .catch((error) => {
+                // エラーが発生した場合、コンソールで詳細を確認
+                console.error("ERROR: Firebaseへの保存に失敗しました。", error);
+                alert("データの保存に失敗しました。認証情報またはセキュリティルールを確認してください。");
+            });
+
+        console.log("データ送信処理を開始:", data);
+    });
+
+                // alert("基本情報が正常に保存されました。\n次にリアルタイム管理画面へ遷移します。");
+
+                // TODO: サーバーへのデータ送信処理
+
+
+    </script>
+
+</body>
+</html>
