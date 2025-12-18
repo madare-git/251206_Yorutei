@@ -134,8 +134,51 @@
         
     </div>
 
-    <script>
-        // JavaScript: リアルタイムの状態管理
+    <script type="module">
+        
+        
+        // =========================================================
+        // 1. Firebase Realtime Database連携コード
+        // =========================================================
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+        import {
+            getDatabase,
+            ref,
+            push,
+            set,
+            update,
+            remove,
+            onChildAdded,
+            onChildChanged,
+            onChildRemoved
+        } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-analytics.js";
+        
+
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "API_KEY",
+            authDomain: "API_KEY",
+            projectId: "API_KEY",
+            storageBucket: "API_KEY",
+            messagingSenderId: "API_KEY",
+            appId: "API_KEY"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig); //Firebaseに接続
+        const db = getDatabase(app);              //RealtimeDBに接続
+
+        // ★重要★: 実際には、認証されたユーザー(店舗)の固有IDを使用します。
+        // ここではデモとして、前回登録されたデータキー 'XXX' を使用
+        const SHOP_ID = 'XXX'; 
+    
+        // 参照先のパス: RealtimeDB/Shopinfo/XXX
+        const shopRef = ref(db, `Shopinfo/${SHOP_ID}`);
+        
+        // =========================================================
+        // 2. UI要素と状態管理
+        // =========================================================
 
         const toggle = document.getElementById('serviceToggle');
         const statusDisplay = document.getElementById('status-display');
@@ -148,7 +191,9 @@
         let currentCapacity = 0; // 現在提供可能な席数 (初期値0)
         const maxCapacity = 50;  // 仮の最大席数
 
-        // 状態を更新し、サーバーに送信する関数
+        // =========================================================
+        // 3. 状態の更新とFirebaseへの送信関数
+        // =========================================================
         function updateStatus(isOn, newCapacity) {
             isServiceOn = isOn;
             currentCapacity = newCapacity;
@@ -167,16 +212,32 @@
             }
             
             currentCapacitySpan.textContent = currentCapacity;
-
-            // 2. サーバーへのデータ送信
-            const realTimeData = {
-                shop_id: 'SHOP_001', // 実際は認証情報から取得
-                is_active: isServiceOn,
+            
+            // 2. Firebase Realtime Database へのデータ更新
+            const updates = {
+                // yorutei_status: チェックボックスの状態に基づき '提供中' or '停止中'
+                yorutei_status: isServiceOn ? '提供中' : '停止中', 
+                // available_seating: 現在の席数を送信
                 available_seating: currentCapacity
             };
-            console.log("リアルタイムデータ更新:", realTimeData);
-            // TODO: fetch('/api/vendor/status', { method: 'POST', body: JSON.stringify(realTimeData) });
+            
+            // update() 関数で指定したパスのデータを部分的に更新
+            update(shopRef, updates)
+                .then(() => {
+                    console.log("SUCCESS: リアルタイムステータスがFirebaseに更新されました。");
+                })
+                .catch((error) => {
+                    console.error("ERROR: Firebase更新に失敗しました。", error);
+                    alert("ステータス更新に失敗しました。認証情報またはネットワークを確認してください。");
+                });
+
+            console.log("リアルタイムデータ更新:", updates);
         }
+        
+        
+        // =========================================================
+        // 4. イベントリスナー
+        // =========================================================       
         
         // トグルスイッチのイベント
         toggle.addEventListener('change', () => {
@@ -202,8 +263,60 @@
             }
         });
 
-        // 初期ロード時の状態設定（アプリ起動時はOFFを想定）
-        updateStatus(false, 0);
+
+        // =========================================================
+        // 3. 初期ロード時の状態同期 (追加)
+        // =========================================================
+
+        // Firebaseから現在の状態を一度だけ読み込む
+        onValue(shopRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                const status = data.yorutei_status;
+                const capacity = data.available_seating || 0; // データがない場合は0とする
+                
+                const isOn = status === '提供中';
+                
+                // トグルと内部変数の状態を同期
+                toggle.checked = isOn;
+                
+                // UIを更新（更新時にFirebaseに再送信されないように、直接UIのみ操作する関数を用意しても良いですが、
+                // ここでは updateStatus()がFirebase更新を兼ねるため、初期化専用の関数として扱う）
+                isServiceOn = isOn;
+                currentCapacity = capacity;
+                
+                if (isServiceOn) {
+                    statusDisplay.textContent = `提供中 - 残り ${currentCapacity} 席`;
+                    statusDisplay.style.backgroundColor = '#E8F5E9';
+                    statusDisplay.style.color = '#2E7D32';
+                    capacitySection.classList.remove('hidden');
+                } else {
+                    statusDisplay.textContent = '現在、提供は停止中です';
+                    statusDisplay.style.backgroundColor = '#FFEBEE';
+                    statusDisplay.style.color = '#C62828';
+                    capacitySection.classList.add('hidden');
+                }
+                currentCapacitySpan.textContent = currentCapacity;
+                
+                console.log("初期状態同期完了:", status, capacity);
+
+            } else {
+                // 指定した固定キーのデータが存在しない場合
+                toggle.checked = false;
+                isServiceOn = false;
+                currentCapacity = 0;
+                statusDisplay.textContent = 'エラー：指定キーのデータが見つかりません。基本情報登録が必要です。';
+                capacitySection.classList.add('hidden');
+                console.log("初期データなし。指定されたキー（-OgDAbUGhAtEGy4OmZP9）が存在しません。");
+                
+            
+            }
+
+        }, {
+            onlyOnce: true // ページロード時の一度だけ実行
+        });
+
+
     </script>
 
 </body>
